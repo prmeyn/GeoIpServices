@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace GeoIpCommon.DTOs
+﻿namespace GeoIpCommon.DTOs
 {
-	internal class GeoIpInfo
+	public sealed class GeoIpInfo
 	{
 	}
 }
