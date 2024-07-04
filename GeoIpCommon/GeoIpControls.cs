@@ -3,5 +3,6 @@
 	public sealed class GeoIpControls
 	{
 		public HashSet<GeoIpInfoProvider> Priority { get; init; }
+		public byte MaxRoundRobinAttempts { get; init; }
 	}
 }

@@ -1,4 +1,7 @@
-﻿using MongoDB.Bson.Serialization.Attributes;
+﻿using EarthCountriesInfo;
+using GeoIpCommon.DTOs;
+using HumanLanguages;
+using MongoDB.Bson.Serialization.Attributes;
 using System.Text.Json.Serialization;
 
 namespace GeoIpStack.Database.DTOs
@@ -20,5 +23,13 @@ namespace GeoIpStack.Database.DTOs
 		[JsonPropertyName("longitude")] public double? Longitude { get; set; }
 		[JsonPropertyName("location")] public Location? Location { get; set; }
 		public DateTimeOffset ResponseTimeStampUTC { get; set; }
+
+		internal GeoIpInfo ToGeoIpInfo()
+		{
+			return new GeoIpInfo() { 
+				LocationsLanguageIsoCodes = Location?.Languages?.Select(languageCode => HumanHelper.CreateLanguageIsoCode(languageCode?.Code))?.ToHashSet(),
+				CountryCode = Enum.TryParse(CountryCode, ignoreCase: true, out CountryIsoCode result) ? result : null
+			};
+		}
 	}
 }

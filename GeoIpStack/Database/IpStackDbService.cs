@@ -11,23 +11,17 @@ namespace GeoIpStack.Database
 		private readonly ILogger<IpStackDbService> _logger;
 		IMongoDatabase _database;
 		private IMongoCollection<IpStackInfo> _ipStackInfoCollection;
-		private readonly string _apiPostfix;
-		private readonly Uri _apiPrefixUri;
+		
 
 		public IpStackDbService(
 			ILogger<IpStackDbService> logger,
 			IHttpClientFactory httpClientFactory,
 			IConfiguration configuration,
-			MongoService mongoService)
+			MongoService mongoService,
+			IpStackInitializer ipStackInitializer)
 		{
 			_logger = logger;
 			_ipStackInfoCollection = mongoService.Database.GetCollection<IpStackInfo>(nameof(IpStackInfo), new MongoCollectionSettings() { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority });
-
-			// Retrieve the configuration values for ipStack section
-			var ipStackConfig = configuration.GetSection("ipStack");
-
-			_apiPrefixUri = new Uri(ipStackConfig["apiPrefix"]);
-			_apiPostfix = ipStackConfig["apiPostfix"];
 		}
 
 
@@ -43,9 +37,5 @@ namespace GeoIpStack.Database
 			var filter = Builders<IpStackInfo>.Filter.Eq(ipsi => ipsi.Id, ip);
 			return await _ipStackInfoCollection.Find(filter).FirstOrDefaultAsync();
 		}
-
-		internal Uri GetBaseAddress() => _apiPrefixUri;
-
-		internal string GetApiPostfix() => _apiPostfix;
 	}
 }

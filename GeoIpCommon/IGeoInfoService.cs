@@ -5,6 +5,6 @@ namespace GeoIpCommon
 {
 	public interface IGeoInfoService
 	{
-		Task<GeoIpInfo> GetGeoIpInfoFromIpv4(IPAddress ipV4);
+		Task<GeoIpInfo?> GetGeoIpInfoFromIpv4(IPAddress ipV4);
 	}
 }

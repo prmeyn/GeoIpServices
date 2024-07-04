@@ -1,13 +1,22 @@
 ﻿using GeoIpCommon;
+using GeoIpStack;
+using GeoIpStack.Database;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoIpServices
 {
 	public static class SeviceCollectionExtensions
 	{
-		public static void AddSMSwitchServices(this IServiceCollection services)
+		public static void AddGeoIpServices(this IServiceCollection services)
 		{
 			services.AddSingleton<GeoIpInitializer>();
+
+			services.AddSingleton<IpStackInitializer>();
+			services.AddSingleton<IpStackDbService>();
+			services.AddHttpClient();
+			services.AddTransient<IpStackService>();
+
+			services.AddScoped<GeoIpService>();
 		}
 	}
 }

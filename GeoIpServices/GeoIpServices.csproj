@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GeoIpCommon\GeoIpCommon.csproj" />
+    <ProjectReference Include="..\GeoIpStack\GeoIpStack.csproj" />
   </ItemGroup>
 
 </Project>

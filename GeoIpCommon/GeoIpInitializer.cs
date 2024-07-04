@@ -8,7 +8,8 @@ namespace GeoIpCommon
 		public GeoIpInitializer(IConfiguration configuration)
 		{
 			var geoIpControlsConfig = configuration.GetSection("GeoIpSettings:Controls");
-			GeoIpControls = new GeoIpControls() { 
+			GeoIpControls = new GeoIpControls() {
+				MaxRoundRobinAttempts = byte.TryParse(geoIpControlsConfig["MaxRoundRobinAttempts"], out byte maxRoundRobinAttempts) ? maxRoundRobinAttempts : (byte)1,
 				Priority = getPriority(geoIpControlsConfig?.GetRequiredSection("Priority")?.Get<string[]>())
 			};
 		}
