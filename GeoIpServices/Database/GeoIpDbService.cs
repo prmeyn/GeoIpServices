@@ -18,14 +18,44 @@ namespace GeoIpServices.Database
 			_ = _geoIpInfoSessionCollection.Indexes.CreateOneAsync(indexModel);
 		}
 
-		internal Task<GeoIpInfoSession?> GetOrCreateAndGetLatestSession(IPAddress ipV4)
+		private FilterDefinition<GeoIpInfoSession> Filter(IPAddress ipV4) => Builders<GeoIpInfoSession>.Filter.Eq(t => t.IpV4, ipV4.ToString());
+		private FilterDefinition<GeoIpInfoSession> Filter(string sessionId) => Builders<GeoIpInfoSession>.Filter.Eq(t => t.SessionId, sessionId);
+		internal async Task<GeoIpInfoSession?> GetOrCreateAndGetLatestSession(IPAddress ipV4)
 		{
-			throw new NotImplementedException();
+			var latestSession = await GetLatestSession(ipV4);
+			if (latestSession != null && latestSession.HasNotExpired())
+			{
+				return latestSession;
+			}
+			latestSession = new GeoIpInfoSession()
+			{
+				SessionId = Guid.NewGuid().ToString(),
+				IpV4 = ipV4.ToString(),
+				StartTimeUTC = DateTimeOffset.UtcNow
+			};
+
+			await _geoIpInfoSessionCollection.InsertOneAsync(latestSession);
+
+			return latestSession;
 		}
 
-		internal Task UpdateSession(GeoIpInfoSession session)
+		internal async Task UpdateSession(GeoIpInfoSession session)
 		{
-			throw new NotImplementedException();
+			var options = new ReplaceOptions { IsUpsert = true };
+			await _geoIpInfoSessionCollection.ReplaceOneAsync(Filter(session.SessionId), session, options);
+		}
+
+		internal async Task<GeoIpInfoSession?> GetLatestSession(IPAddress ipV4)
+		{
+			var allRecords = _geoIpInfoSessionCollection.Find(Filter(ipV4));
+
+			if (allRecords?.Any() ?? false)
+			{
+				var list = allRecords.ToList();
+				return list
+				.FirstOrDefault();
+			}
+			return null;
 		}
 	}
 }

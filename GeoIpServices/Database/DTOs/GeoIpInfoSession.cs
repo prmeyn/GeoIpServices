@@ -11,5 +11,7 @@ namespace GeoIpServices.Database.DTOs
 		public Queue<GeoIpInfoProvider>? GeoIpInfoProvidersQueue { get; set; }
 		public required DateTimeOffset StartTimeUTC { get; init; } = DateTimeOffset.UtcNow;
 		public DateTimeOffset? SuccessfullyCompletedTimestampUTC { get; set; }
+
+		internal bool HasNotExpired() => SuccessfullyCompletedTimestampUTC == null;
 	}
 }

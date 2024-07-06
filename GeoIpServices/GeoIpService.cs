@@ -17,10 +17,12 @@ namespace GeoIpServices
 
 		public GeoIpService(
 			GeoIpInitializer geoIpInitializer,
+			GeoIpDbService geoIpDbService,
 			IpStackService ipStackService,
 			ILogger<GeoIpService> logger)
 		{
 			_geoIpInitializer = geoIpInitializer;
+			_geoIpDbService = geoIpDbService;
 			_ipStackService = ipStackService;
 			_logger = logger;
 		}
@@ -80,13 +82,22 @@ namespace GeoIpServices
 						geoIpInfoProvidersQueue.Dequeue();
 					}
 				}
+				if (session.GeoIpInfoProvidersQueue != geoIpInfoProvidersQueue)
+				{
+					session.GeoIpInfoProvidersQueue = geoIpInfoProvidersQueue;
+					await _geoIpDbService.UpdateSession(session);
+				}
 
-				session.GeoIpInfoProvidersQueue = geoIpInfoProvidersQueue;
-				await _geoIpDbService.UpdateSession(session);
+
 
 				if (geoIpInfoFromIpv4Response is null)
 				{
 					_logger.LogCritical($"Unable to fetch info for IP: {ipV4} with SessionId{session?.SessionId}");
+				}
+				else
+				{
+					session.SuccessfullyCompletedTimestampUTC = DateTime.UtcNow;
+					await _geoIpDbService.UpdateSession(session);
 				}
 				return geoIpInfoFromIpv4Response;
 			}
