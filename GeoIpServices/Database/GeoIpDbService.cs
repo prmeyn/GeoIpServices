@@ -1,4 +1,5 @@
-﻿using GeoIpServices.Database.DTOs;
+﻿using GeoIpCommon;
+using GeoIpServices.Database.DTOs;
 using MongoDB.Driver;
 using MongoDbService;
 using System.Net;
@@ -8,8 +9,12 @@ namespace GeoIpServices.Database
 	public sealed class GeoIpDbService
 	{
 		private IMongoCollection<GeoIpInfoSession> _geoIpInfoSessionCollection;
-		public GeoIpDbService(MongoService mongoService)
+		private readonly GeoIpInitializer _geoIpInitializer;
+		public GeoIpDbService(
+			MongoService mongoService,
+			GeoIpInitializer geoIpInitializer)
 		{
+			_geoIpInitializer = geoIpInitializer;
 			_geoIpInfoSessionCollection = mongoService.Database.GetCollection<GeoIpInfoSession>(nameof(GeoIpInfoSession), new MongoCollectionSettings() { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority });
 
 			// Create an index on IpV4
@@ -23,7 +28,7 @@ namespace GeoIpServices.Database
 		internal async Task<GeoIpInfoSession?> GetOrCreateAndGetLatestSession(IPAddress ipV4)
 		{
 			var latestSession = await GetLatestSession(ipV4);
-			if (latestSession != null && latestSession.HasNotExpired())
+			if (latestSession != null)
 			{
 				return latestSession;
 			}
@@ -31,7 +36,8 @@ namespace GeoIpServices.Database
 			{
 				SessionId = Guid.NewGuid().ToString(),
 				IpV4 = ipV4.ToString(),
-				StartTimeUTC = DateTimeOffset.UtcNow
+				StartTimeUTC = DateTimeOffset.UtcNow,
+				ExpiryTimeUTC = DateTimeOffset.UtcNow.AddSeconds(_geoIpInitializer.GeoIpControls.SessionTimeoutInSeconds)
 			};
 
 			await _geoIpInfoSessionCollection.InsertOneAsync(latestSession);
@@ -52,7 +58,8 @@ namespace GeoIpServices.Database
 			if (allRecords?.Any() ?? false)
 			{
 				var list = allRecords.ToList();
-				return list
+				return list.Where(r => r.HasNotExpired())?
+				.OrderByDescending(record => record.ExpiryTimeUTC)?
 				.FirstOrDefault();
 			}
 			return null;
