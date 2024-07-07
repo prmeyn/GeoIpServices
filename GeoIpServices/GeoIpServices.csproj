@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	  <PackageLicenseFile>LICENSE</PackageLicenseFile>
+	  <PackageReadmeFile>README.md</PackageReadmeFile>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -14,6 +16,9 @@
   <ItemGroup>
     <ProjectReference Include="..\GeoIpCommon\GeoIpCommon.csproj" />
     <ProjectReference Include="..\GeoIpStack\GeoIpStack.csproj" />
+
+	  <None Include="../LICENSE" Pack="true" PackagePath="\" />
+	  <None Include="../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

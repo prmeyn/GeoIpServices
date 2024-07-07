@@ -10,7 +10,7 @@
     <PackageReference Include="HumanLanguages" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
-    <PackageReference Include="MongoDbService" Version="2.0.0" />
+    <PackageReference Include="MongoDbService" Version="3.1.0" />
   </ItemGroup>
 
   <ItemGroup>
