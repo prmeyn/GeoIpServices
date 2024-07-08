@@ -1,8 +1,8 @@
-﻿using GeoIpCommon;
-using GeoIpCommon.DTOs;
+﻿using GeoIpServices.Common;
+using GeoIpServices.Common.DTOs;
 using GeoIpServices.Database;
 using GeoIpServices.Database.DTOs;
-using GeoIpStack;
+using GeoIpServices.Services.IpStack;
 using Microsoft.Extensions.Logging;
 using System.Net;
 

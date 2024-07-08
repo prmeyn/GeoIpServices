@@ -1,7 +1,7 @@
-﻿using GeoIpCommon;
+﻿using GeoIpServices.Common;
 using GeoIpServices.Database;
-using GeoIpStack;
-using GeoIpStack.Database;
+using GeoIpServices.Services.IpStack;
+using GeoIpServices.Services.IpStack.Database;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoIpServices

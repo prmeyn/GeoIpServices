@@ -1,4 +1,4 @@
-﻿using GeoIpCommon;
+﻿using GeoIpServices.Common;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace GeoIpServices.Database.DTOs

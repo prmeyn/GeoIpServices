@@ -1,4 +1,4 @@
-﻿using GeoIpCommon;
+﻿using GeoIpServices.Common;
 using GeoIpServices.Database.DTOs;
 using MongoDB.Driver;
 using MongoDbService;

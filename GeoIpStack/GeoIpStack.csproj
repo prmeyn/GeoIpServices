@@ -13,8 +13,4 @@
     <PackageReference Include="MongoDbService" Version="3.1.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\GeoIpCommon\GeoIpCommon.csproj" />
-  </ItemGroup>
-
 </Project>
