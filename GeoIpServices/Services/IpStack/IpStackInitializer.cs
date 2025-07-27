@@ -22,6 +22,10 @@ namespace GeoIpServices.Services.IpStack
 					ApiPrefix = new Uri(ipStackConfig["ApiPrefix"]),
 					ApiPostfix = ipStackConfig["ApiPostfix"]
 				};
+				if (!IpStackSettings?.ApiPostfix?.StartsWith("?access_key=") ?? true)
+				{
+					logger.LogCritical("IpStack ApiPostfix needs to start with \'?access_key=\'");
+				}
 			}
 			catch (Exception ex)
 			{
