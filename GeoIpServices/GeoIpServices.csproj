@@ -1,24 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	  <PackageId>GeoIpServices</PackageId>
+	  <Version>1.0.0</Version>
+	  <Authors>Prashansa Meyn</Authors>
+	  <Company>Prashansa Meyn</Company>
+	  <Description>A C# library that provides geolocation information for IP addresses with MongoDB caching. Wraps third-party IP geolocation services (IpStack) to reduce API usage and costs through intelligent caching and session management.</Description>
+	  <PackageTags>geolocation;ip;ipstack;mongodb;geocoding;geo;ip-address;location;geoip;caching</PackageTags>
+	  <RepositoryUrl>https://github.com/prmeyn/GeoIpServices</RepositoryUrl>
+	  <RepositoryType>git</RepositoryType>
+	  <PackageProjectUrl>https://github.com/prmeyn/GeoIpServices</PackageProjectUrl>
 	  <PackageLicenseFile>LICENSE</PackageLicenseFile>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EarthCountriesInfo" Version="4.0.0" />
-    <PackageReference Include="HumanLanguages" Version="10.1.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.6" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.6" />
-	<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.6" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.6" />
-    <PackageReference Include="MongoDB.Bson" Version="3.4.0" />
-    <PackageReference Include="MongoDB.Driver" Version="3.4.0" />
-    <PackageReference Include="MongoDbService" Version="5.1.0" />
+    <PackageReference Include="EarthCountriesInfo" Version="10.0.0" />
+    <PackageReference Include="HumanLanguages" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="MongoDB.Bson" Version="3.5.1" />
+    <PackageReference Include="MongoDB.Driver" Version="3.5.1" />
+    <PackageReference Include="MongoDbService" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
