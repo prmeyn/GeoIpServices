@@ -9,7 +9,7 @@
 ## ✨ Features
 
 - 🌍 **IP Geolocation Lookup** - Convert IPv4 addresses to geographic information (country, region, city, etc.)
-- 💾 **MongoDB Caching** - Store geolocation data in your own MongoDB instance to minimize external API calls
+- 💾 **MongoDB Caching** - Store geolocation data in your own MongoDB instance with automatic TTL-based expiration
 - 🔄 **Round-Robin Fallback** - Automatic retry mechanism with configurable priority-based provider queuing
 - 📊 **Session Management** - Track lookup sessions to prevent duplicate queries and manage retries efficiently
 - 🔌 **Extensible Architecture** - Easy to add support for additional IP geolocation providers
@@ -50,7 +50,8 @@ Add the following configuration to your `appsettings.json`:
   },
   "GeoIpSettings": {
     "Controls": {
-      "SessionTimeoutInSeconds": 240,
+      "SessionTimeoutInSeconds": 300,
+      "CacheDurationInHours": 24,
       "MaxRoundRobinAttempts": 2,
       "Priority": [ "IpStack" ]
     },
@@ -64,17 +65,22 @@ Add the following configuration to your `appsettings.json`:
 
 **Configuration Options:**
 
-- `SessionTimeoutInSeconds`: How long to cache IP information before refreshing (default: 240 seconds)
-- `MaxRoundRobinAttempts`: Number of retry attempts per provider (default: 2)
-- `Priority`: Array of providers to use in order of preference
-- `ApiPostfix`: Your IpStack API key - **Important:** Keep this in user secrets or environment variables in production!
+| Option | Default | Description |
+|--------|---------|-------------|
+| `SessionTimeoutInSeconds` | 300 | How long lookup sessions remain active before expiring (MongoDB TTL) |
+| `CacheDurationInHours` | 24 | How long cached geolocation data is retained before expiring (MongoDB TTL) |
+| `MaxRoundRobinAttempts` | 1 | Number of retry cycles through all providers |
+| `Priority` | Required | Array of providers to use in order of preference (e.g., `["IpStack"]`) |
+| `ApiPostfix` | Required | Your IpStack API key - **Important:** Keep this in user secrets or environment variables in production! |
+
+> **Note:** Both `SessionTimeoutInSeconds` and `CacheDurationInHours` use MongoDB TTL indexes for automatic cleanup of expired documents.
 
 ### Usage Example
 
 Here's a complete example of a minimal API that returns geolocation information for the requesting IP:
 
 ```csharp
-using GeoIpServices;
+using GeoIpServices.Common;
 using Microsoft.AspNetCore.Mvc;
 using MongoDbService;
 using System.Net;
@@ -95,28 +101,28 @@ var app = builder.Build();
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-	app.UseSwagger();
-	app.UseSwaggerUI();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 // Endpoint to get geolocation info from visitor's IP
-app.MapGet("/ipinfo", async ([FromServices] GeoIpService geoIpService, HttpRequest httpRequest) =>
+app.MapGet("/ipinfo", async ([FromServices] IGeoInfoService geoIpService, HttpRequest httpRequest) =>
 {
-	var ipAddress = GetOriginIpV4(httpRequest);
-	
-	if (ipAddress == null)
-	{
-		return Results.BadRequest("Unable to determine IP address");
-	}
-	
-	var geoInfo = await geoIpService.GetGeoIpInfoFromIpv4(ipAddress);
-	
-	if (geoInfo == null)
-	{
-		return Results.NotFound("Geolocation information not available");
-	}
-	
-	return Results.Ok(geoInfo);
+    var ipAddress = GetOriginIpV4(httpRequest);
+
+    if (ipAddress is null)
+    {
+        return Results.BadRequest("Unable to determine IP address");
+    }
+
+    var geoInfo = await geoIpService.GetGeoIpInfoFromIpv4(ipAddress);
+
+    if (geoInfo is null)
+    {
+        return Results.NotFound("Geolocation information not available");
+    }
+
+    return Results.Ok(geoInfo);
 })
 .WithName("GetGeoIpInfoFromIpv4")
 .WithOpenApi();
@@ -124,21 +130,20 @@ app.MapGet("/ipinfo", async ([FromServices] GeoIpService geoIpService, HttpReque
 // Helper method to extract client IP from request
 IPAddress? GetOriginIpV4(HttpRequest httpRequest)
 {
-	var xForwardedForHeader = httpRequest.Headers["X-Forwarded-For"];
-	var ipString = xForwardedForHeader.Select(s => s.Trim()).FirstOrDefault();
-	
-	if (string.IsNullOrWhiteSpace(ipString) || !IPAddress.TryParse(ipString, out IPAddress? clientIpAddress))
-	{
-		return null;
-	}
-	
-	if (clientIpAddress.AddressFamily == AddressFamily.InterNetworkV6)
-	{
-		// If it's an IPv6 address, convert to IPv4
-		return clientIpAddress.MapToIPv4();
-	}
-	
-	return clientIpAddress;
+    var xForwardedForHeader = httpRequest.Headers["X-Forwarded-For"];
+    var ipString = xForwardedForHeader.Select(s => s?.Trim()).FirstOrDefault();
+
+    if (string.IsNullOrWhiteSpace(ipString) || !IPAddress.TryParse(ipString, out IPAddress? clientIpAddress))
+    {
+        return null;
+    }
+
+    if (clientIpAddress.AddressFamily == AddressFamily.InterNetworkV6)
+    {
+        return clientIpAddress.MapToIPv4();
+    }
+
+    return clientIpAddress;
 }
 
 app.Run();
@@ -159,9 +164,14 @@ app.Run();
 - Ensure the database user has read/write permissions
 
 **Issue: Always getting fresh data (cache not working)**
-- Check `SessionTimeoutInSeconds` is set appropriately
-- Verify MongoDB is successfully storing session data
+- Check `CacheDurationInHours` is set appropriately
+- Verify MongoDB TTL indexes are created on the collections
 - Check application logs for any database write errors
+
+**Issue: Configuration errors on startup**
+- Ensure all required configuration values are present (`Priority`, `ApiPrefix`, `ApiPostfix`)
+- Verify `ApiPostfix` starts with `?access_key=`
+- Check that `Priority` contains at least one valid provider name
 
 ## 🤝 Contributing
 

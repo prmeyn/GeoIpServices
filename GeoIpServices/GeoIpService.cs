@@ -4,6 +4,7 @@ using GeoIpServices.Database;
 using GeoIpServices.Database.DTOs;
 using GeoIpServices.Services.IpStack;
 using Microsoft.Extensions.Logging;
+using MongoDB.Driver;
 using System.Net;
 
 namespace GeoIpServices
@@ -34,13 +35,18 @@ namespace GeoIpServices
 			{
 				return null;
 			}
-			GeoIpInfo geoIpInfoResponse = null;
-			GeoIpInfoSession session = null;
+
+			GeoIpInfoSession? session = null;
 			try
 			{
 				session = await _geoIpDbService.GetOrCreateAndGetLatestSession(ipV4);
+				if (session is null)
+				{
+					_logger.LogWarning("Failed to create or retrieve session for IP: {IpAddress}", ipV4);
+					return null;
+				}
 
-				Queue<GeoIpInfoProvider> geoIpInfoProvidersQueue = null;
+				Queue<GeoIpInfoProvider> geoIpInfoProvidersQueue;
 				if (session.GeoIpInfoProvidersQueue?.Any() ?? false)
 				{
 					geoIpInfoProvidersQueue = session.GeoIpInfoProvidersQueue;
@@ -66,46 +72,48 @@ namespace GeoIpServices
 				GeoIpInfo? geoIpInfoFromIpv4Response = null;
 				while (geoIpInfoProvidersQueue.Count > 0)
 				{
-
 					geoIpInfoFromIpv4Response = geoIpInfoProvidersQueue.Peek() switch
 					{
 						GeoIpInfoProvider.IpStack => await _ipStackService.GetGeoIpInfoFromIpv4(ipV4),
-						_ => throw new NotImplementedException(),
+						_ => throw new NotSupportedException($"GeoIpInfoProvider '{geoIpInfoProvidersQueue.Peek()}' is not supported."),
 					};
 
 					if (geoIpInfoFromIpv4Response is not null)
 					{
 						break;
 					}
-					else
-					{
-						geoIpInfoProvidersQueue.Dequeue();
-					}
+
+					geoIpInfoProvidersQueue.Dequeue();
 				}
+
 				if (session.GeoIpInfoProvidersQueue != geoIpInfoProvidersQueue)
 				{
 					session.GeoIpInfoProvidersQueue = geoIpInfoProvidersQueue;
 					await _geoIpDbService.UpdateSession(session);
 				}
 
-
-
 				if (geoIpInfoFromIpv4Response is null)
 				{
-					_logger.LogCritical($"Unable to fetch info for IP: {ipV4} with SessionId{session?.SessionId}");
+					_logger.LogWarning("Unable to fetch geo info for IP: {IpAddress}, SessionId: {SessionId}", ipV4, session.SessionId);
 				}
 				else
 				{
-					session.SuccessfullyCompletedTimestampUTC = DateTime.UtcNow;
+					session.IsCompleted = true;
 					await _geoIpDbService.UpdateSession(session);
 				}
+
 				return geoIpInfoFromIpv4Response;
 			}
-			catch (Exception exception)
+			catch (MongoException ex)
 			{
-				_logger.LogCritical(exception, $"Unable to fetch info for IP: {ipV4} with SessionId{session?.SessionId}");
+				_logger.LogError(ex, "Database error while processing IP: {IpAddress}, SessionId: {SessionId}", ipV4, session?.SessionId);
+				return null;
 			}
-			return null;
+			catch (NotSupportedException ex)
+			{
+				_logger.LogError(ex, "Unsupported provider encountered for IP: {IpAddress}, SessionId: {SessionId}", ipV4, session?.SessionId);
+				return null;
+			}
 		}
 	}
 }

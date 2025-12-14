@@ -1,6 +1,5 @@
 ﻿using GeoIpServices.Common;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace GeoIpServices.Services.IpStack
 {
@@ -8,29 +7,33 @@ namespace GeoIpServices.Services.IpStack
 	{
 		internal readonly IpStackSettings IpStackSettings;
 
-		public IpStackInitializer(
-					IConfiguration configuration,
-					ILogger<IpStackInitializer> logger)
+		public IpStackInitializer(IConfiguration configuration)
 		{
-			try
-			{
+			var ipStackConfig = configuration.GetSection($"GeoIpSettings:{GeoIpInfoProvider.IpStack}");
 
-				var ipStackConfig = configuration.GetSection($"GeoIpSettings:{GeoIpInfoProvider.IpStack}");
+			var apiPrefix = ipStackConfig["ApiPrefix"];
+			var apiPostfix = ipStackConfig["ApiPostfix"];
 
-				IpStackSettings = new IpStackSettings()
-				{
-					ApiPrefix = new Uri(ipStackConfig["ApiPrefix"]),
-					ApiPostfix = ipStackConfig["ApiPostfix"]
-				};
-				if (!IpStackSettings?.ApiPostfix?.StartsWith("?access_key=") ?? true)
-				{
-					logger.LogCritical("IpStack ApiPostfix needs to start with \'?access_key=\'");
-				}
-			}
-			catch (Exception ex)
+			if (string.IsNullOrWhiteSpace(apiPrefix))
 			{
-				logger.LogError(ex, "Unable to initialize IpStack");
+				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPrefix is required but was not configured.");
 			}
+
+			if (string.IsNullOrWhiteSpace(apiPostfix))
+			{
+				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPostfix is required but was not configured.");
+			}
+
+			if (!apiPostfix.StartsWith("?access_key="))
+			{
+				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPostfix must start with '?access_key='.");
+			}
+
+			IpStackSettings = new IpStackSettings()
+			{
+				ApiPrefix = new Uri(apiPrefix),
+				ApiPostfix = apiPostfix
+			};
 		}
 	}
 }

@@ -1,6 +1,5 @@
-﻿using GeoIpServices.Services.IpStack.Database.DTOs;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+﻿using GeoIpServices.Common;
+using GeoIpServices.Services.IpStack.Database.DTOs;
 using MongoDB.Driver;
 using MongoDbService;
 
@@ -8,20 +7,19 @@ namespace GeoIpServices.Services.IpStack.Database
 {
 	public sealed class IpStackDbService
 	{
-		private readonly ILogger<IpStackDbService> _logger;
-		IMongoDatabase _database;
-		private IMongoCollection<IpStackInfo> _ipStackInfoCollection;
-		
+		private readonly IMongoCollection<IpStackInfo> _ipStackInfoCollection;
 
 		public IpStackDbService(
-			ILogger<IpStackDbService> logger,
-			IHttpClientFactory httpClientFactory,
-			IConfiguration configuration,
 			MongoService mongoService,
-			IpStackInitializer ipStackInitializer)
+			GeoIpInitializer geoIpInitializer)
 		{
-			_logger = logger;
 			_ipStackInfoCollection = mongoService.Database.GetCollection<IpStackInfo>(nameof(IpStackInfo), new MongoCollectionSettings() { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority });
+
+			// Create TTL index on ResponseTimeStampUTC - MongoDB will automatically delete expired cache entries
+			var ttlIndexKeys = Builders<IpStackInfo>.IndexKeys.Ascending(x => x.ResponseTimeStampUTC);
+			var ttlIndexOptions = new CreateIndexOptions { ExpireAfter = TimeSpan.FromHours(geoIpInitializer.GeoIpControls.CacheDurationInHours) };
+			var ttlIndexModel = new CreateIndexModel<IpStackInfo>(ttlIndexKeys, ttlIndexOptions);
+			_ = _ipStackInfoCollection.Indexes.CreateOneAsync(ttlIndexModel);
 		}
 
 

@@ -26,8 +26,11 @@ namespace GeoIpServices.Services.IpStack.Database.DTOs
 
 		internal GeoIpInfo ToGeoIpInfo()
 		{
-			return new GeoIpInfo() { 
-				LocationsLanguageIsoCodes = Location?.Languages?.Select(languageCode => HumanHelper.CreateLanguageIsoCode(languageCode?.Code))?.ToHashSet(),
+			return new GeoIpInfo() {
+				LocationsLanguageIsoCodes = Location?.Languages?
+					.Where(lang => !string.IsNullOrWhiteSpace(lang?.Code))
+					.Select(lang => HumanHelper.CreateLanguageIsoCode(lang!.Code!))
+					.ToHashSet(),
 				CountryCode = Enum.TryParse(CountryCode, ignoreCase: true, out CountryIsoCode result) ? result : null
 			};
 		}
