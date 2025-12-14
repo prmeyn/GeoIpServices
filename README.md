@@ -80,7 +80,7 @@ Add the following configuration to your `appsettings.json`:
 Here's a complete example of a minimal API that returns geolocation information for the requesting IP:
 
 ```csharp
-using GeoIpServices.Common;
+using GeoIpServices;
 using Microsoft.AspNetCore.Mvc;
 using MongoDbService;
 using System.Net;
@@ -106,7 +106,8 @@ if (app.Environment.IsDevelopment())
 }
 
 // Endpoint to get geolocation info from visitor's IP
-app.MapGet("/ipinfo", async ([FromServices] IGeoInfoService geoIpService, HttpRequest httpRequest) =>
+// You can inject either IGeoInfoService (interface) or GeoIpService (concrete class)
+app.MapGet("/ipinfo", async ([FromServices] GeoIpService geoIpService, HttpRequest httpRequest) =>
 {
     var ipAddress = GetOriginIpV4(httpRequest);
 

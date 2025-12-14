@@ -18,7 +18,8 @@ namespace GeoIpServices
 			services.AddHttpClient();
 			services.AddSingleton<IpStackService>();
 
-			services.AddScoped<IGeoInfoService, GeoIpService>();
+			services.AddScoped<GeoIpService>();
+			services.AddScoped<IGeoInfoService>(sp => sp.GetRequiredService<GeoIpService>());
 		}
 	}
 }
