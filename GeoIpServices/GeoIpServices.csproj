@@ -1,11 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
 	  <PackageId>GeoIpServices</PackageId>
 	  <Version>1.0.0</Version>
 	  <Authors>Prashansa Meyn</Authors>
 	  <Company>Prashansa Meyn</Company>
-	  <Description>A C# library that provides geolocation information for IP addresses with MongoDB caching. Wraps third-party IP geolocation services (IpStack) to reduce API usage and costs through intelligent caching and session management.</Description>
+	  <Description>A C# library that provides geolocation information for IP addresses with MongoDB caching. Wraps third-party IP geolocation services (IpStack) to reduce API usage and costs through intelligent caching.</Description>
 	  <PackageTags>geolocation;ip;ipstack;mongodb;geocoding;geo;ip-address;location;geoip;caching</PackageTags>
 	  <RepositoryUrl>https://github.com/prmeyn/GeoIpServices</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
@@ -17,22 +17,38 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+	  <!-- SourceLink ships in the SDK, so publishing the repository URL and embedding untracked sources is
+	       enough to give consumers step-through debugging. -->
+	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
+	  <PublishRepositoryUrl>true</PublishRepositoryUrl>
+	  <EmbedUntrackedSources>true</EmbedUntrackedSources>
+	  <IncludeSymbols>true</IncludeSymbols>
+	  <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	  <DebugType>portable</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="EarthCountriesInfo" Version="10.0.0" />
-    <PackageReference Include="HumanLanguages" Version="10.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
-	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageReference Include="MongoDB.Bson" Version="3.5.1" />
-    <PackageReference Include="MongoDB.Driver" Version="3.5.1" />
-    <PackageReference Include="MongoDbService" Version="10.0.0" />
+    <PackageReference Include="EarthCountriesInfo" Version="10.2.0" />
+    <PackageReference Include="HumanLanguages" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
+	<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
+	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="MongoDB.Bson" Version="3.10.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.10.0" />
+    <PackageReference Include="MongoDbService" Version="10.2.0" />
   </ItemGroup>
 
   <ItemGroup>
 	  <None Include="../LICENSE" Pack="true" PackagePath="\" />
 	  <None Include="../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+	  <InternalsVisibleTo Include="GeoIpServices.Tests" />
   </ItemGroup>
 
 </Project>

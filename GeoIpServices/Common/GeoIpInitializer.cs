@@ -1,37 +1,101 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace GeoIpServices.Common
 {
+	/// <summary>
+	/// Reads and validates the <c>GeoIpSettings:Controls</c> configuration section.
+	/// </summary>
+	/// <remarks>
+	/// Invalid values throw rather than falling back to a default, so a misconfiguration fails the deploy
+	/// instead of quietly changing behaviour. <c>AddGeoIpServices</c> registers a hosted service that
+	/// resolves this type during startup so the failure surfaces there rather than on the first request.
+	/// </remarks>
 	public sealed class GeoIpInitializer
 	{
-		private const int DefaultSessionTimeoutInSeconds = 300;
+		private const string SectionName = "GeoIpSettings:Controls";
+		private const byte DefaultMaxRoundRobinAttempts = 1;
 		private const int DefaultCacheDurationInHours = 24;
 
-		public readonly GeoIpControls GeoIpControls;
+		/// <summary>The validated controls.</summary>
+		public GeoIpControls GeoIpControls { get; }
 
+		/// <summary>Reads and validates the configuration section.</summary>
+		/// <exception cref="InvalidOperationException">The section is missing or contains invalid values.</exception>
 		public GeoIpInitializer(IConfiguration configuration)
 		{
-			var geoIpControlsConfig = configuration.GetSection("GeoIpSettings:Controls");
-			GeoIpControls = new GeoIpControls() {
-				MaxRoundRobinAttempts = byte.TryParse(geoIpControlsConfig["MaxRoundRobinAttempts"], out byte maxRoundRobinAttempts) ? maxRoundRobinAttempts : (byte)1,
-				SessionTimeoutInSeconds = int.TryParse(geoIpControlsConfig["SessionTimeoutInSeconds"], out int sessionTimeout) ? sessionTimeout : DefaultSessionTimeoutInSeconds,
-				CacheDurationInHours = int.TryParse(geoIpControlsConfig["CacheDurationInHours"], out int cacheDuration) ? cacheDuration : DefaultCacheDurationInHours,
-				Priority = GetPriority(geoIpControlsConfig?.GetRequiredSection("Priority")?.Get<string[]>())
+			ArgumentNullException.ThrowIfNull(configuration);
+
+			IConfigurationSection controlsConfig = configuration.GetSection(SectionName);
+
+			GeoIpControls = new GeoIpControls()
+			{
+				MaxRoundRobinAttempts = ReadMaxRoundRobinAttempts(controlsConfig["MaxRoundRobinAttempts"]),
+				CacheDurationInHours = ReadCacheDurationInHours(controlsConfig["CacheDurationInHours"]),
+				Priority = ReadPriority(controlsConfig.GetSection("Priority").Get<string[]>())
 			};
 		}
 
-		private static HashSet<GeoIpInfoProvider> GetPriority(string[]? value)
+		private static byte ReadMaxRoundRobinAttempts(string? configuredValue)
 		{
-			if (value is null || value.Length < 1)
+			if (string.IsNullOrWhiteSpace(configuredValue))
 			{
-				throw new InvalidOperationException("GeoIpSettings:Controls:Priority is required but was not configured.");
+				return DefaultMaxRoundRobinAttempts;
 			}
-			var valuesFromConfig = value.Where(p => Enum.TryParse(p, out GeoIpInfoProvider _)).Select(p => Enum.Parse<GeoIpInfoProvider>(p)).ToHashSet();
-			if (valuesFromConfig.Count < 1)
+
+			// Zero would drain the retry budget before any provider was called, so a lookup would return
+			// null without a single upstream request and without anything to explain why.
+			if (!byte.TryParse(configuredValue, out byte maxRoundRobinAttempts) || maxRoundRobinAttempts < 1)
 			{
-				throw new InvalidOperationException("GeoIpSettings:Controls:Priority must contain at least one valid provider.");
+				throw new InvalidOperationException(
+					$"{SectionName}:MaxRoundRobinAttempts must be a whole number between 1 and {byte.MaxValue}, but was '{configuredValue}'.");
 			}
-			return valuesFromConfig;
+
+			return maxRoundRobinAttempts;
+		}
+
+		private static int ReadCacheDurationInHours(string? configuredValue)
+		{
+			if (string.IsNullOrWhiteSpace(configuredValue))
+			{
+				return DefaultCacheDurationInHours;
+			}
+
+			// A non-positive duration becomes a TTL index that expires documents the moment they are written
+			// (or a negative expireAfterSeconds that MongoDB rejects outright).
+			if (!int.TryParse(configuredValue, out int cacheDurationInHours) || cacheDurationInHours < 1)
+			{
+				throw new InvalidOperationException(
+					$"{SectionName}:CacheDurationInHours must be a positive whole number, but was '{configuredValue}'.");
+			}
+
+			return cacheDurationInHours;
+		}
+
+		private static IReadOnlyList<GeoIpInfoProvider> ReadPriority(string[]? configuredNames)
+		{
+			if (configuredNames is null || configuredNames.Length < 1)
+			{
+				throw new InvalidOperationException($"{SectionName}:Priority is required but was not configured.");
+			}
+
+			List<GeoIpInfoProvider> priority = new(configuredNames.Length);
+			foreach (string? configuredName in configuredNames)
+			{
+				// Unrecognised names are rejected rather than skipped: silently dropping a typo leaves the
+				// caller with a confusing "no valid providers" error that never names the offending value.
+				if (!EnumParser.TryParseName(configuredName, out GeoIpInfoProvider provider))
+				{
+					throw new InvalidOperationException(
+						$"{SectionName}:Priority contains '{configuredName}', which is not a known provider. Valid providers are: {string.Join(", ", Enum.GetNames<GeoIpInfoProvider>())}.");
+				}
+
+				if (!priority.Contains(provider))
+				{
+					priority.Add(provider);
+				}
+			}
+
+			return priority;
 		}
 	}
 }

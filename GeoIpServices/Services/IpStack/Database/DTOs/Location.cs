@@ -1,8 +1,8 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace GeoIpServices.Services.IpStack.Database.DTOs
 {
-	public sealed class Location
+	internal sealed class Location
 	{
 		[JsonPropertyName("geoname_id")] public int? GeonameId { get; set; }
 		[JsonPropertyName("capital")] public string? Capital { get; set; }
