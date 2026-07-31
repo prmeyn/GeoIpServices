@@ -15,6 +15,60 @@
 - 🔌 **Extensible Architecture** - Add providers by implementing `IGeoIpProvider`
 - ⚡ **Cost Effective** - Reduce API costs for high-traffic applications
 
+## 🧭 How It Works
+
+A lookup passes through two layers. The outer one decides *which* provider to ask; the inner one avoids
+asking at all wherever possible.
+
+```
+    caller
+      │  IGeoInfoService.GetGeoIpInfoFromIpv4(ip, ct)
+      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ GeoIpService                                                │
+│  • rejects anything that is not IPv4 / IPv4-mapped IPv6     │
+│  • walks Priority in order, MaxRoundRobinAttempts times     │
+│  • returns the first non-null answer                        │
+└─────────────────────────────────────────────────────────────┘
+      │  IGeoIpProvider.GetGeoIpInfoAsync(ip, ct)
+      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ IpStackService                                              │
+│  1. coalesce — concurrent callers for the same address      │
+│     join one in-flight lookup instead of each doing their   │
+│     own                                                     │
+│  2. read the MongoDB cache ────────► hit? return it         │
+│  3. miss: call the IpStack API                              │
+│  4. reject HTTP-200 error envelopes and mismatched replies  │
+│  5. write to the cache, then return                         │
+└─────────────────────────────────────────────────────────────┘
+      │
+      ▼
+   IpStackDbService  →  MongoDB collection "IpStackInfo"
+```
+
+**The cache is the point of the library.** Entries live in the `IpStackInfo` collection keyed by IP address,
+and are removed by a MongoDB TTL index on `ResponseTimeStampUTC` after `CacheDurationInHours`. Only a cache
+miss costs an IpStack API call, and coalescing means a burst of concurrent requests for a cold address costs
+one call rather than one per request.
+
+**At startup**, `AddGeoIpServices()` also registers a hosted service that reads and validates the whole
+`GeoIpSettings` section and creates the TTL index before the app serves traffic. Both steps fail the host
+rather than the first request. If `CacheDurationInHours` has changed since the index was created, it is
+updated in place — MongoDB will not let `createIndex` change an existing TTL, so this is done with `collMod`.
+
+### Repository Layout
+
+| Path | What it is |
+|------|-----------|
+| `GeoIpServices/Common/` | The public surface: `IGeoInfoService`, `GeoIpInfo`, configuration binding, and the `IGeoIpProvider` abstraction |
+| `GeoIpServices/GeoIpService.cs` | Provider-independent orchestration — address normalisation, priority order, retry budget |
+| `GeoIpServices/Services/IpStack/` | Everything IpStack-specific: HTTP call, response DTOs, and the MongoDB cache. Internal to the assembly |
+| `GeoIpServices/ServiceCollectionExtensions.cs` | `AddGeoIpServices()` — the single entry point for wiring it all up |
+| `GeoIpServices.Tests/` | Unit tests; `Integration/` holds the ones needing a live MongoDB |
+| `global.json` | Pins the .NET SDK so local and CI builds agree |
+| `.github/workflows/` | `ci.yml` builds and tests every push and PR; `release.yml` publishes on a `v*` tag |
+
 ## 📋 Prerequisites
 
 - .NET 10.0 or later
@@ -157,6 +211,48 @@ IPAddress? GetOriginIpV4(HttpRequest httpRequest)
 
 app.Run();
 ```
+
+### What You Get Back
+
+`GeoIpInfo` serialized by a minimal API. Note that `CountryCode` and the language codes are **enums**, and
+System.Text.Json writes enums as their numeric value by default:
+
+```json
+{
+  "locationsLanguageIsoCodes": [ { "languageId": 36, "languageLocaleVariationCode": 0 } ],
+  "countryCode": 37,
+  "continentCode": "EU",
+  "continentName": "Europe",
+  "regionCode": "84",
+  "regionName": "Region Hovedstaden",
+  "city": "Copenhagen",
+  "zip": "1050",
+  "latitude": 55.6759,
+  "longitude": 12.5655,
+  "isEuMember": true
+}
+```
+
+That is almost certainly not what you want over the wire. Registering a `JsonStringEnumConverter` gives the
+readable form:
+
+```csharp
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+```
+
+```json
+{
+  "locationsLanguageIsoCodes": [ { "languageId": "da", "languageLocaleVariationCode": "DK" } ],
+  "countryCode": "DK",
+  "continentCode": "EU",
+  ...
+}
+```
+
+In C#, prefer working with the enums directly — `geoInfo.CountryCode == CountryIsoCode.DK` — and use
+`languageIsoCode.ToIsoCodeString()` for the conventional `da-DK` form. Any field the provider did not return
+is `null`.
 
 > **Security:** `X-Forwarded-For` is client-supplied and trivially spoofed. In production, prefer ASP.NET Core's
 > [Forwarded Headers Middleware](https://learn.microsoft.com/aspnet/core/host-and-deploy/proxy-load-balancer)
