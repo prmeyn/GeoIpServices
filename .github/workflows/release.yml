@@ -13,6 +13,17 @@ jobs:
     permissions:
       contents: read
       id-token: write # required for NuGet Trusted Publishing (OIDC)
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
     steps:
     # Actions are pinned to a commit SHA rather than a mutable tag, so a compromised or retagged
     # release cannot silently change what runs here.
@@ -34,8 +45,12 @@ jobs:
       run: dotnet restore
     - name: Build
       run: dotnet build --configuration Release --no-restore -p:Version=${VERSION} -p:ContinuousIntegrationBuild=true
+    # The integration tests skip themselves when no server is reachable, so this variable is what makes
+    # them actually run rather than silently pass as skipped.
     - name: Test
       run: dotnet test --configuration Release --no-build
+      env:
+        MONGODB_CONNECTION_STRING: mongodb://localhost:27017
     # Packs the library project specifically, so the test project is not packed alongside it.
     # This also emits GeoIpServices.${VERSION}.snupkg, which the push step uploads automatically.
     - name: Pack

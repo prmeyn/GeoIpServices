@@ -236,6 +236,11 @@ We welcome contributions! If you find a bug or have an idea for improvement:
 
 Run the test suite with `dotnet test`.
 
+The suite includes integration tests that need a MongoDB server. They skip themselves when none is
+reachable, so `dotnet test` works without one — but to run them, point `MONGODB_CONNECTION_STRING` at a
+server (defaulting to `mongodb://localhost:27017`). Each test creates its own uniquely named database and
+drops it afterwards, so nothing else on the server is touched.
+
 ## 📝 License
 
 This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
