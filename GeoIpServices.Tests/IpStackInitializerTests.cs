@@ -40,7 +40,11 @@ public sealed class IpStackInitializerTests
 	[Theory]
 	[InlineData("")]
 	[InlineData("not a uri")]
+	// On Unix this parses as an absolute file path (file:///relative/only) and on Windows it does not,
+	// so only a scheme check rejects it consistently on both.
 	[InlineData("/relative/only")]
+	[InlineData("file:///tmp/whatever")]
+	[InlineData("ftp://api.ipstack.com/")]
 	[InlineData("https://api.ipstack.com/?access_key=LEAKED")]
 	public void InvalidApiPrefix_Throws(string configuredValue)
 	{

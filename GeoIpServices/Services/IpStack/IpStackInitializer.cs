@@ -35,9 +35,15 @@ namespace GeoIpServices.Services.IpStack
 				throw new InvalidOperationException($"{sectionName}:ApiPrefix is required but was not configured.");
 			}
 
-			if (!Uri.TryCreate(configuredValue, UriKind.Absolute, out Uri? apiPrefix))
+			// Uri.TryCreate with UriKind.Absolute is platform-dependent: on Unix a leading slash is a valid
+			// absolute file path, so "/foo" yields file:///foo and succeeds, while on Windows it fails.
+			// Constraining the scheme makes this deterministic, and rejects file:/ftp: prefixes that
+			// HttpClient could never issue a request against anyway.
+			if (!Uri.TryCreate(configuredValue, UriKind.Absolute, out Uri? apiPrefix)
+				|| (apiPrefix.Scheme != Uri.UriSchemeHttp && apiPrefix.Scheme != Uri.UriSchemeHttps))
 			{
-				throw new InvalidOperationException($"{sectionName}:ApiPrefix ('{configuredValue}') is not a valid absolute URI.");
+				throw new InvalidOperationException(
+					$"{sectionName}:ApiPrefix ('{configuredValue}') must be an absolute http or https URI.");
 			}
 
 			if (!string.IsNullOrEmpty(apiPrefix.Query) || !string.IsNullOrEmpty(apiPrefix.Fragment))
