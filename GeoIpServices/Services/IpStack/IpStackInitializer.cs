@@ -1,39 +1,103 @@
-﻿using GeoIpServices.Common;
+using GeoIpServices.Common;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoIpServices.Services.IpStack
 {
-	public sealed class IpStackInitializer
+	/// <summary>
+	/// Reads and validates the <c>GeoIpSettings:IpStack</c> configuration section.
+	/// </summary>
+	internal sealed class IpStackInitializer
 	{
-		internal readonly IpStackSettings IpStackSettings;
+		private const string AccessKeyPrefix = "?access_key=";
+		private const int DefaultTimeoutInSeconds = 10;
+
+		internal IpStackSettings IpStackSettings { get; }
 
 		public IpStackInitializer(IConfiguration configuration)
 		{
-			var ipStackConfig = configuration.GetSection($"GeoIpSettings:{GeoIpInfoProvider.IpStack}");
+			ArgumentNullException.ThrowIfNull(configuration);
 
-			var apiPrefix = ipStackConfig["ApiPrefix"];
-			var apiPostfix = ipStackConfig["ApiPostfix"];
-
-			if (string.IsNullOrWhiteSpace(apiPrefix))
-			{
-				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPrefix is required but was not configured.");
-			}
-
-			if (string.IsNullOrWhiteSpace(apiPostfix))
-			{
-				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPostfix is required but was not configured.");
-			}
-
-			if (!apiPostfix.StartsWith("?access_key="))
-			{
-				throw new InvalidOperationException("GeoIpSettings:IpStack:ApiPostfix must start with '?access_key='.");
-			}
+			string sectionName = $"GeoIpSettings:{GeoIpInfoProvider.IpStack}";
+			IConfigurationSection ipStackConfig = configuration.GetSection(sectionName);
 
 			IpStackSettings = new IpStackSettings()
 			{
-				ApiPrefix = new Uri(apiPrefix),
-				ApiPostfix = apiPostfix
+				ApiPrefix = ReadApiPrefix(sectionName, ipStackConfig["ApiPrefix"]),
+				ApiPostfix = ReadApiPostfix(sectionName, ipStackConfig["ApiPostfix"]),
+				RequestTimeout = ReadRequestTimeout(sectionName, ipStackConfig["TimeoutInSeconds"])
 			};
+		}
+
+		private static Uri ReadApiPrefix(string sectionName, string? configuredValue)
+		{
+			if (string.IsNullOrWhiteSpace(configuredValue))
+			{
+				throw new InvalidOperationException($"{sectionName}:ApiPrefix is required but was not configured.");
+			}
+
+			// Uri.TryCreate with UriKind.Absolute is platform-dependent: on Unix a leading slash is a valid
+			// absolute file path, so "/foo" yields file:///foo and succeeds, while on Windows it fails.
+			// Constraining the scheme makes this deterministic, and rejects file:/ftp: prefixes that
+			// HttpClient could never issue a request against anyway.
+			if (!Uri.TryCreate(configuredValue, UriKind.Absolute, out Uri? apiPrefix)
+				|| (apiPrefix.Scheme != Uri.UriSchemeHttp && apiPrefix.Scheme != Uri.UriSchemeHttps))
+			{
+				throw new InvalidOperationException(
+					$"{sectionName}:ApiPrefix ('{configuredValue}') must be an absolute http or https URI.");
+			}
+
+			if (!string.IsNullOrEmpty(apiPrefix.Query) || !string.IsNullOrEmpty(apiPrefix.Fragment))
+			{
+				throw new InvalidOperationException(
+					$"{sectionName}:ApiPrefix must not contain a query string or fragment. The access key belongs in ApiPostfix.");
+			}
+
+			// Resolving a relative URI against a base address whose path has no trailing slash replaces the
+			// last segment, so "https://api.ipstack.com/v1" would quietly request "https://api.ipstack.com/1.2.3.4".
+			if (!apiPrefix.AbsolutePath.EndsWith('/'))
+			{
+				apiPrefix = new Uri(apiPrefix.AbsoluteUri + "/");
+			}
+
+			return apiPrefix;
+		}
+
+		private static string ReadApiPostfix(string sectionName, string? configuredValue)
+		{
+			// Deliberately never include the configured value in these messages - it carries the access key.
+			if (string.IsNullOrWhiteSpace(configuredValue))
+			{
+				throw new InvalidOperationException($"{sectionName}:ApiPostfix is required but was not configured.");
+			}
+
+			if (!configuredValue.StartsWith(AccessKeyPrefix, StringComparison.Ordinal))
+			{
+				throw new InvalidOperationException($"{sectionName}:ApiPostfix must start with '{AccessKeyPrefix}'.");
+			}
+
+			if (configuredValue.Length == AccessKeyPrefix.Length)
+			{
+				throw new InvalidOperationException(
+					$"{sectionName}:ApiPostfix contains no access key after '{AccessKeyPrefix}'. Supply your IpStack access key.");
+			}
+
+			return configuredValue;
+		}
+
+		private static TimeSpan ReadRequestTimeout(string sectionName, string? configuredValue)
+		{
+			if (string.IsNullOrWhiteSpace(configuredValue))
+			{
+				return TimeSpan.FromSeconds(DefaultTimeoutInSeconds);
+			}
+
+			if (!int.TryParse(configuredValue, out int timeoutInSeconds) || timeoutInSeconds < 1)
+			{
+				throw new InvalidOperationException(
+					$"{sectionName}:TimeoutInSeconds must be a positive whole number, but was '{configuredValue}'.");
+			}
+
+			return TimeSpan.FromSeconds(timeoutInSeconds);
 		}
 	}
 }
