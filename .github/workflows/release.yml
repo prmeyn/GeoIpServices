@@ -6,13 +6,13 @@ on:
     tags:
     - "v[0-9]+.[0-9]+.[0-9]+"
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # required for NuGet Trusted Publishing (OIDC)
     steps:
     # Actions are pinned to a commit SHA rather than a mutable tag, so a compromised or retagged
     # release cannot silently change what runs here.
@@ -40,7 +40,12 @@ jobs:
     # This also emits GeoIpServices.${VERSION}.snupkg, which the push step uploads automatically.
     - name: Pack
       run: dotnet pack GeoIpServices/GeoIpServices.csproj --configuration Release --no-build -p:Version=${VERSION} --output .
+    # Exchanges a GitHub OIDC token for an API key valid for one hour, so no long-lived NuGet
+    # credential has to be stored as a repository secret.
+    - name: NuGet login (OIDC -> temp API key)
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+      id: login
+      with:
+        user: globalpay
     - name: Push
-      run: dotnet nuget push GeoIpServices.${VERSION}.nupkg --api-key ${NUGET_API_KEY} --source https://api.nuget.org/v3/index.json
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push "GeoIpServices.${VERSION}.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
