@@ -67,7 +67,7 @@ updated in place — MongoDB will not let `createIndex` change an existing TTL, 
 | `GeoIpServices/ServiceCollectionExtensions.cs` | `AddGeoIpServices()` — the single entry point for wiring it all up |
 | `GeoIpServices.Tests/` | Unit tests; `Integration/` holds the ones needing a live MongoDB |
 | `global.json` | Pins the .NET SDK so local and CI builds agree |
-| `.github/workflows/` | `ci.yml` builds and tests every push and PR; `release.yml` publishes on a `v*` tag |
+| `.github/workflows/` | `release.yml` builds, tests and publishes to NuGet on a `v*` tag |
 
 ## 📋 Prerequisites
 
