@@ -29,9 +29,11 @@ jobs:
     # release cannot silently change what runs here.
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 0 # full history — the ancestry check below needs it
     - name: Verify commit exists in origin/main
       run: |
-        git fetch --no-tags --prune --depth=1 origin +refs/heads/*:refs/remotes/origin/*
+        git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
         git branch --remote --contains | grep origin/main
     # Without this the build depends on whichever SDK the runner image happens to ship, which for
     # net10.0 is not something to leave to chance. global.json pins the version.
