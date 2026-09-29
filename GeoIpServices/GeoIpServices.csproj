@@ -31,12 +31,13 @@
   <ItemGroup>
     <PackageReference Include="EarthCountriesInfo" Version="10.2.1" />
     <PackageReference Include="HumanLanguages" Version="11.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
-	<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
-	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
+	<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageReference Include="MongoDB.Bson" Version="3.10.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.10.0" />
     <PackageReference Include="MongoDbService" Version="10.2.1" />
