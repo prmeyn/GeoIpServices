@@ -135,4 +135,26 @@ public sealed class IpStackServiceIntegrationTests
 		Assert.Null(result);
 		Assert.Equal(0, await scope.RawIpStackInfoCollection.CountDocumentsAsync(MongoDB.Driver.Builders<MongoDB.Bson.BsonDocument>.Filter.Empty));
 	}
+
+	/// <summary>
+	/// IpStack may spell an IPv6 address differently from the request (case, zero compression). That must
+	/// still be accepted, and cached under the request's spelling - under IpStack's, every later lookup
+	/// would miss the cache and pay again.
+	/// </summary>
+	[MongoFact]
+	public async Task IPv6EchoedInADifferentSpelling_IsAcceptedAndServedFromTheCache()
+	{
+		await using MongoTestScope scope = await MongoTestScope.CreateAsync();
+		GatedHandler handler = new(SuccessPayload("2001:0DB8:0001:0002:0000:0000:0000:0000"));
+		handler.Release();
+		IpStackService service = scope.CreateIpStackService(new StubHttpClientFactory(handler));
+		IPAddress network = IPAddress.Parse("2001:db8:1:2::");
+
+		GeoIpInfo? first = await service.GetGeoIpInfoAsync(network, CancellationToken.None);
+		GeoIpInfo? second = await service.GetGeoIpInfoAsync(network, CancellationToken.None);
+
+		Assert.Equal("Copenhagen", first?.City);
+		Assert.Equal("Copenhagen", second?.City);
+		Assert.Equal(1, handler.CallCount);
+	}
 }

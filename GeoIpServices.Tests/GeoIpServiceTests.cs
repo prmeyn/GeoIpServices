@@ -5,6 +5,9 @@ using System.Net;
 
 namespace GeoIpServices.Tests;
 
+// GetGeoIpInfoFromIpv4 is obsolete but still shipped, so its behaviour stays pinned here.
+#pragma warning disable CS0618
+
 public sealed class GeoIpServiceTests
 {
 	private sealed class StubProvider(GeoIpInfo? result) : IGeoIpProvider
@@ -134,6 +137,75 @@ public sealed class GeoIpServiceTests
 		await Assert.ThrowsAnyAsync<OperationCanceledException>(
 			() => service.GetGeoIpInfoFromIpv4(IPAddress.Parse("1.2.3.4"), cancellationTokenSource.Token));
 
+		Assert.Equal(0, provider.CallCount);
+	}
+
+	/// <summary>
+	/// Native IPv6 is looked up by its /64: one customer network geolocates as its hosts do, and the cache
+	/// then holds one entry per network rather than one per device per rotated privacy address.
+	/// </summary>
+	[Theory]
+	[InlineData("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::")]
+	[InlineData("2a03:2880:f003:c07:face:b00c::2", "2a03:2880:f003:c07::")]
+	[InlineData("2001:4860:4860::8888", "2001:4860:4860::")]
+	public async Task NativeIPv6_IsLookedUpByItsSlash64Network(string ipAddress, string expectedLookup)
+	{
+		StubProvider provider = new(new GeoIpInfo());
+		GeoIpService service = CreateService(provider);
+
+		await service.GetGeoIpInfoAsync(IPAddress.Parse(ipAddress));
+
+		Assert.Equal(IPAddress.Parse(expectedLookup), Assert.Single(provider.ReceivedAddresses));
+	}
+
+	[Fact]
+	public async Task TwoDevicesOnOneNetwork_ReachTheProviderAsTheSameAddress()
+	{
+		StubProvider provider = new(new GeoIpInfo());
+		GeoIpService service = CreateService(provider);
+
+		await service.GetGeoIpInfoAsync(IPAddress.Parse("2001:db8:1:2:aaaa:bbbb:cccc:dddd"));
+		await service.GetGeoIpInfoAsync(IPAddress.Parse("2001:db8:1:2:1111:2222:3333:4444"));
+
+		Assert.Equal(2, provider.ReceivedAddresses.Count);
+		Assert.Equal(provider.ReceivedAddresses[0], provider.ReceivedAddresses[1]);
+	}
+
+	[Theory]
+	[InlineData("::1")]                // loopback
+	[InlineData("::")]                 // unspecified
+	[InlineData("fe80::1234:5678")]    // link-local
+	[InlineData("fd12:3456:789a::1")]  // unique-local
+	[InlineData("ff02::1")]            // multicast
+	public async Task NonRoutableIPv6_NeverReachesAProvider(string ipAddress)
+	{
+		StubProvider provider = new(new GeoIpInfo());
+		GeoIpService service = CreateService(provider);
+
+		Assert.Null(await service.GetGeoIpInfoAsync(IPAddress.Parse(ipAddress)));
+		Assert.Equal(0, provider.CallCount);
+	}
+
+	[Theory]
+	[InlineData("1.2.3.4", "1.2.3.4")]
+	[InlineData("::ffff:1.2.3.4", "1.2.3.4")]
+	public async Task GetGeoIpInfoAsync_TreatsIPv4AsBefore(string ipAddress, string expectedLookup)
+	{
+		StubProvider provider = new(new GeoIpInfo());
+		GeoIpService service = CreateService(provider);
+
+		await service.GetGeoIpInfoAsync(IPAddress.Parse(ipAddress));
+
+		Assert.Equal(IPAddress.Parse(expectedLookup), Assert.Single(provider.ReceivedAddresses));
+	}
+
+	[Fact]
+	public async Task GetGeoIpInfoAsync_NullAddress_ReturnsNull()
+	{
+		StubProvider provider = new(new GeoIpInfo());
+		GeoIpService service = CreateService(provider);
+
+		Assert.Null(await service.GetGeoIpInfoAsync(null));
 		Assert.Equal(0, provider.CallCount);
 	}
 }

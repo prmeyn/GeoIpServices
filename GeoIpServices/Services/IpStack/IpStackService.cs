@@ -93,12 +93,19 @@ namespace GeoIpServices.Services.IpStack
 				IpStackInfo? responseValue = JsonSerializer.Deserialize<IpStackInfo>(responseBody);
 				if (responseValue is null
 					|| string.IsNullOrEmpty(responseValue.Id)
-					|| !string.Equals(responseValue.Id, ip, StringComparison.Ordinal)
+					// Compared as addresses, not text: an IPv6 address has many spellings (case, zero
+					// compression), and IpStack is free to echo it back in a different one.
+					|| !IPAddress.TryParse(responseValue.Id, out IPAddress? respondedAddress)
+					|| !respondedAddress.Equals(IPAddress.Parse(ip))
 					|| string.IsNullOrWhiteSpace(responseValue.CountryCode))
 				{
 					_logger.LogWarning("IpStack returned an invalid or incomplete response for IP: {IpAddress}", ip);
 					return null;
 				}
+
+				// Cached under OUR spelling, the one GetByIdAsync looks up - under IpStack's, every later
+				// lookup of this address would miss the cache and spend quota again.
+				responseValue.Id = ip;
 
 				responseValue.ResponseTimeStampUTC = DateTime.UtcNow;
 				await _ipStackDbService.InsertOrOverwriteAsync(responseValue, CancellationToken.None).ConfigureAwait(false);

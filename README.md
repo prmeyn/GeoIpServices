@@ -8,7 +8,7 @@
 
 ## ✨ Features
 
-- 🌍 **IP Geolocation Lookup** - Resolve IPv4 addresses to country, region, city, postal code, coordinates and spoken languages
+- 🌍 **IP Geolocation Lookup** - Resolve IPv4 and IPv6 addresses to country, region, city, postal code, coordinates and spoken languages
 - 💾 **MongoDB Caching** - Store geolocation data in your own MongoDB instance, expired automatically by a TTL index
 - 🤝 **Request Coalescing** - Concurrent lookups of the same address share a single upstream call
 - 🔄 **Priority & Retry** - Query providers in a configured order, with a bounded retry budget per lookup
@@ -22,11 +22,12 @@ asking at all wherever possible.
 
 ```
     caller
-      │  IGeoInfoService.GetGeoIpInfoFromIpv4(ip, ct)
+      │  IGeoInfoService.GetGeoIpInfoAsync(ip, ct)
       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ GeoIpService                                                │
-│  • rejects anything that is not IPv4 / IPv4-mapped IPv6     │
+│  • IPv4 as-is, IPv4-mapped IPv6 unwrapped, native IPv6      │
+│    narrowed to its /64; non-routable addresses rejected     │
 │  • walks Priority in order, MaxRoundRobinAttempts times     │
 │  • returns the first non-null answer                        │
 └─────────────────────────────────────────────────────────────┘
@@ -138,10 +139,9 @@ Here's a complete example of a minimal API that returns geolocation information 
 
 ```csharp
 using GeoIpServices;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using MongoDbService;
-using System.Net;
-using System.Net.Sockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -155,6 +155,12 @@ builder.Services.AddGeoIpServices();
 
 var app = builder.Build();
 
+// Behind a reverse proxy, let the Forwarded Headers Middleware set Connection.RemoteIpAddress. It takes the
+// RIGHT-most X-Forwarded-For entry - the one your proxy appended - and only from a trusted proxy (loopback by
+// default; add yours to KnownProxies / KnownNetworks). Never read the header yourself: its left-most entry is
+// whatever the client chose to write.
+app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor });
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -166,14 +172,15 @@ if (app.Environment.IsDevelopment())
 // You can inject either IGeoInfoService (interface) or GeoIpService (concrete class)
 app.MapGet("/ipinfo", async ([FromServices] GeoIpService geoIpService, HttpRequest httpRequest, CancellationToken cancellationToken) =>
 {
-    var ipAddress = GetOriginIpV4(httpRequest);
+    // IPv4 or IPv6 - normalization (unwrapping IPv4-mapped addresses, narrowing IPv6 to its /64) happens inside.
+    var ipAddress = httpRequest.HttpContext.Connection.RemoteIpAddress;
 
     if (ipAddress is null)
     {
         return Results.BadRequest("Unable to determine IP address");
     }
 
-    var geoInfo = await geoIpService.GetGeoIpInfoFromIpv4(ipAddress, cancellationToken);
+    var geoInfo = await geoIpService.GetGeoIpInfoAsync(ipAddress, cancellationToken);
 
     if (geoInfo is null)
     {
@@ -182,32 +189,8 @@ app.MapGet("/ipinfo", async ([FromServices] GeoIpService geoIpService, HttpReque
 
     return Results.Ok(geoInfo);
 })
-.WithName("GetGeoIpInfoFromIpv4")
+.WithName("GetGeoIpInfo")
 .WithOpenApi();
-
-// Helper method to extract client IP from request
-IPAddress? GetOriginIpV4(HttpRequest httpRequest)
-{
-    // X-Forwarded-For is a comma-separated list ("client, proxy1, proxy2"), so passing the whole header
-    // value to TryParse fails as soon as there is more than one proxy in front of the app.
-    var forwardedFor = httpRequest.Headers["X-Forwarded-For"].FirstOrDefault();
-    var ipString = forwardedFor?.Split(',').FirstOrDefault()?.Trim();
-
-    if (string.IsNullOrWhiteSpace(ipString) || !IPAddress.TryParse(ipString, out IPAddress? clientIpAddress))
-    {
-        return null;
-    }
-
-    if (clientIpAddress.AddressFamily == AddressFamily.InterNetworkV6)
-    {
-        // MapToIPv4() does not validate. For a native IPv6 address it simply reinterprets the last four
-        // bytes, so 2001:db8::1 would silently become 0.0.0.1 - a meaningless lookup that spends API
-        // quota and gets cached. Only unwrap addresses that genuinely are IPv4.
-        return clientIpAddress.IsIPv4MappedToIPv6 ? clientIpAddress.MapToIPv4() : null;
-    }
-
-    return clientIpAddress;
-}
 
 app.Run();
 ```
@@ -254,20 +237,32 @@ In C#, prefer working with the enums directly — `geoInfo.CountryCode == Countr
 `languageIsoCode.ToIsoCodeString()` for the conventional `da-DK` form. Any field the provider did not return
 is `null`.
 
-> **Security:** `X-Forwarded-For` is client-supplied and trivially spoofed. In production, prefer ASP.NET Core's
+> **Security:** `X-Forwarded-For` is client-supplied and trivially spoofed. Use ASP.NET Core's
 > [Forwarded Headers Middleware](https://learn.microsoft.com/aspnet/core/host-and-deploy/proxy-load-balancer)
-> configured with your `KnownProxies` / `KnownNetworks`, and read `HttpContext.Connection.RemoteIpAddress`.
+> configured with your `KnownProxies` / `KnownNetworks`, and read `HttpContext.Connection.RemoteIpAddress`, as
+> the example above does. Taking the header's first entry yourself lets any caller pick their own location.
 
 ### IPv6
 
-Only IPv4 addresses, and IPv6 addresses that are IPv4-mapped (`::ffff:a.b.c.d`), are supported. Native IPv6
-addresses return `null` and are logged as a warning. They are deliberately **not** narrowed to IPv4, because
-doing so produces a fabricated address rather than an error.
+`GetGeoIpInfoAsync` accepts any address:
+
+- **IPv4** is looked up as-is, and an **IPv4-mapped IPv6** address (`::ffff:a.b.c.d`) is unwrapped to its IPv4.
+- **Native IPv6** is looked up — and cached — by its **/64 network** (`2001:db8:1:2:aaaa:…` → `2001:db8:1:2::`).
+  A /64 is one customer network and geolocates exactly as its hosts do. Looking up full addresses would cost
+  an API call per device, and again each time a device rotates its privacy address (typically daily).
+- **Addresses nothing can place** — loopback, unspecified, link-local, site-local, unique-local (`fc00::/7`)
+  and multicast — return `null` with a warning, without calling a provider.
+
+Native IPv6 is never narrowed to IPv4: `MapToIPv4()` would reinterpret its last four bytes as a fabricated
+address.
+
+The older `GetGeoIpInfoFromIpv4` is obsolete but unchanged: it still returns `null` for native IPv6.
 
 ### Privacy
 
 IP addresses are personal data under the GDPR. This library stores each looked-up address as the document id
-of its cache entry, and includes addresses in warning and error log messages. Set `CacheDurationInHours` in
+of its cache entry — for IPv6 only the /64 network, never the full address — and includes addresses in warning
+and error log messages. Set `CacheDurationInHours` in
 line with your retention policy, and account for both the cache collection and your log sink in your record
 of processing activities.
 
@@ -302,6 +297,13 @@ capture full URLs.
 - Check that `Priority` contains only known provider names
 
 ## ⬆️ Upgrading
+
+**To 10.3:**
+
+- Call `GetGeoIpInfoAsync` instead of `GetGeoIpInfoFromIpv4`, which is now obsolete. Pass the client address
+  as it is; there is no longer any need to narrow it to IPv4 yourself. See [IPv6](#ipv6).
+- `IGeoInfoService` gained `GetGeoIpInfoAsync` with a default implementation, so your own implementations of
+  the interface keep compiling. They will only resolve IPv4 until you override it.
 
 **From 10.x:**
 
